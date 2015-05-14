@@ -4,56 +4,61 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.ning.http.client.AsyncCompletionHandler;
 import com.ning.http.client.AsyncHttpClient;
+import com.ning.http.client.AsyncHttpClientConfig;
 import com.ning.http.client.Response;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.slf4j.LoggerFactory;
 
 /**
  *
  */
-public class Main {
-
+public class Main { 
+    
+    //ExecutorService es = Executors.newFixedThreadPool(10);
+    //AsyncHttpClientConfig cf = new AsyncHttpClientConfig.Builder().setExecutorService(es).build();
+    //AsyncHttpClient asyncHttpClient = new AsyncHttpClient(cf);
     AsyncHttpClient asyncHttpClient = new AsyncHttpClient();
 
     public void start() throws InterruptedException, ExecutionException {
         long startTime = System.currentTimeMillis();
         System.out.println("Start begin");
         
-        Stream<String> urls = Stream.generate(() -> "http://localhost:8080/greeting?delay=" + randInt(0,5));
+        Stream<String> urls = IntStream
+                .range(0, 1000)
+                .boxed()
+                .sorted(Collections.reverseOrder())
+                .map(n -> "http://localhost:8080/greeting?delay=" + randInt(0,2))
+                .peek(System.out::println);
+        
         
         List<CompletableFuture<String>> bodies = 
                 urls
-                .limit(1000)
-                .map(url -> getPage(url)).collect(Collectors.toList());
+                .map(url -> getPage(url))
+                .collect(Collectors.toList());
         
-        System.out.println("***");
+        System.out.println("All requests sent");
 
-        bodies.stream().parallel().forEach((CompletableFuture f) -> {
-            try {
-                System.out.println(f.get());
-            } catch (InterruptedException | ExecutionException ex) {
-                
-            }
-        });
+        CompletableFuture[] futures = bodies.stream().map(f -> f.thenAccept(System.out::println)).toArray(size -> new CompletableFuture[size]);
+        
+        CompletableFuture.allOf(futures).join();
 
-        System.out.println("Start end: " + (System.currentTimeMillis() - startTime)/1000);
+        System.out.println("Completed in: " + (System.currentTimeMillis() - startTime)/1000);
 
         asyncHttpClient.close();
 
     }
 
     public int randInt(int min, int max) {
-
-        // Usually this can be a field rather than a method variable
         Random rand = new Random();
-
-    // nextInt is normally exclusive of the top value,
-        // so add 1 to make it inclusive
         int randomNum = rand.nextInt((max - min) + 1) + min;
 
         return randomNum;
